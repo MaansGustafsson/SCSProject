@@ -1,0 +1,48 @@
+def remove_overlap(x, y, R, L, dl, N_max_iter):
+    """
+    Function to remove the overlap between particles.
+    Use the volume exclusion methods.
+    If N_max_iter iterations are reached, then it stops.
+
+    Parameters
+    ==========
+    x, y : Positions.
+    R : Particle radius.
+    L : Dimension of the squared arena.
+    dl : Tolerance on the overlap. Must be much smaller than R.
+    N_max_iter : stops if the number of iterations is larger than this.
+    """
+
+    N_part = np.size(x)
+    step = 0
+    running = True
+
+    while running:
+
+        n_overlaps = 0
+
+        for i in np.arange(N_part):
+            for j in np.arange(i + 1, N_part):
+                # Check overlap.
+                dx = x[j] - x[i]
+                dy = y[j] - y[i]
+                dist = np.sqrt(dx ** 2 + dy ** 2)
+
+                if dist < 2 * R - dl:
+                    n_overlaps += 1  # Increment overlap counter.
+                    # Remove overlap.
+                    xm = 0.5 * (x[j] + x[i])
+                    ym = 0.5 * (y[j] + y[i])
+                    x[i] = xm - dx / dist * R
+                    y[i] = ym - dy / dist * R
+                    x[j] = xm + dx / dist * R
+                    y[j] = ym + dy / dist * R
+
+        step += 1
+
+        if (step >= N_max_iter) or (n_overlaps == 0):
+            running = False
+
+    x, y = pbc(x, y, L)  # Apply periodic boundary conditions.
+
+    return x, y
