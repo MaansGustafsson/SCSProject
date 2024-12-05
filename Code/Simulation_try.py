@@ -7,36 +7,37 @@ from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 #How many points in each area
-N = 30
+N = 100
 #Total points (has to be 3xN)
-N2 = 90
+N2 = 300
 
 #Arena proportions
 Lx = 140
 Ly = 40
 
 #Velocity and size of time step
-v0 = 5
+v0 = 4
 dt = 0.01
+exit_cooldown = int(0.5/dt) # Two exits every seconds
 
 #Max run steps
 t_tot = 50000
 
 #The maximum amount of random rotation
-rotation_range = np.pi / 12
+rotation_range = np.pi / 10
 
 #Initialize random positions in 3 different areas of the arena
 x = np.zeros(N2)
 y = np.zeros(N2)
-x[:N] = np.random.randint(low = 32, high = 65, size=[N])
-y[:N] = np.random.randint(low = 22, high = 38, size=[N])
-x[N:2*N] = np.random.randint(low = 106, high = 138, size=[N])
-y[N:2*N] = np.random.randint(low = 2, high = 38, size=[N])
-x[2*N:] = np.random.randint(low = 2, high = 42, size=[N])
-y[2*N:] = np.random.randint(low = 11, high = 26, size=[N])
+x[:N] = np.random.randint(low = 31, high = 104, size=[N])
+y[:N] = np.random.randint(low = 29, high = 39, size=[N])
+x[N:2*N] = np.random.randint(low = 105, high = 139, size=[N])
+y[N:2*N] = np.random.randint(low = 1, high = 39, size=[N])
+x[2*N:] = np.random.randint(low = 1, high = 43, size=[N])
+y[2*N:] = np.random.randint(low = 10, high = 27, size=[N])
 
 #----------- CHOSE SIMULATION TYPE --------#
-sim = 0 # sim = 0 is closest door, sim = 1 is randomly assigned door, sim = 2 is with some 'drunk' particles
+sim = 1 # sim = 0 is closest door, sim = 1 is randomly assigned door, sim = 2 is with some 'drunk' particles
 
 # Center points for doors
 door_1 = [14.5, 28]  #(nx>12) & (nx<17) & (ny>=28)
@@ -53,6 +54,10 @@ vy = v0*np.sin(phi)
 
 x_path = np.zeros([t_tot,N2])
 y_path = np.zeros([t_tot,N2])
+
+exit1_time = 0
+exit2_time = 0
+exit3_time = 0
 
 def find_closest_door(x, y, doors):
     doors_x = np.array([door[0] for door in doors])
@@ -111,13 +116,18 @@ for t in range(t_tot):
     else:
         drunk_range = rotation_range*6
         vx, vy = point_to_door(x, y, closest_door, doors)
-        #Updates the velocities with random angle
+        #Updates the velocities with increased random angle
         randangle_drunk = (np.random.rand(N) - 0.5) * 2 * drunk_range
         randangle = (np.random.rand(N2) - 0.5) * 2 * rotation_range
         nvx = np.cos(randangle) * vx - np.sin(randangle) * vy
         nvy = np.sin(randangle) * vx + np.cos(randangle) * vy
         nvx[int(N/2):int(3*N/2)] = np.cos(randangle_drunk) * vx[int(N/2):int(3*N/2)] - np.sin(randangle_drunk) * vy[int(N/2):int(3*N/2)]
         nvy[int(N/2):int(3*N/2)] = np.sin(randangle_drunk) * vx[int(N/2):int(3*N/2)] + np.cos(randangle_drunk) * vy[int(N/2):int(3*N/2)]       
+
+    #Studsande partiklar
+
+
+
 
     #Redirect around walls
     ind_wall1 = np.where((x<31) & (y>=28))
@@ -146,29 +156,46 @@ for t in range(t_tot):
 
     #Look if any point has reached any of the exits
     ind_exit1 = np.where((nx>12) & (nx<17) & (ny>=28))
+    
     if np.size(ind_exit1) > 0:
-        nx[ind_exit1] = np.nan
-        ny[ind_exit1] = np.nan
-        vx[ind_exit1] = np.nan
-        vy[ind_exit1] = np.nan
-        print("Exit 1")
-        
+        ind_exit1 = ind_exit1[0][0] #Only one person can exit
+        if exit1_time == 0:
+            exit1_time = exit_cooldown
+            nx[ind_exit1] = np.nan
+            ny[ind_exit1] = np.nan
+            vx[ind_exit1] = np.nan
+            vy[ind_exit1] = np.nan
+            print("Exit 1")
+        else:
+            exit1_time -=1
+
     ind_exit2 = np.where((nx>104) & (nx<109) & (ny>=40))
+
     if np.size(ind_exit2) > 0:
-        nx[ind_exit2] = np.nan
-        ny[ind_exit2] = np.nan
-        vx[ind_exit2] = np.nan
-        vy[ind_exit2] = np.nan
-        print("Exit 2")   
+        ind_exit2 = ind_exit2[0][0]     
+        if exit2_time == 0:
+            exit2_time = exit_cooldown
+            nx[ind_exit2] = np.nan
+            ny[ind_exit2] = np.nan
+            vx[ind_exit2] = np.nan
+            vy[ind_exit2] = np.nan
+            print("Exit 2")   
+        else:
+            exit2_time -=1
 
-    ind_exit3 = np.where((ny>5) & (ny<10) & (nx>=140))    
+    ind_exit3 = np.where((ny>5) & (ny<10) & (nx>=140))  
+    
     if np.size(ind_exit3) > 0:
-        nx[ind_exit3] = np.nan
-        ny[ind_exit3] = np.nan
-        vx[ind_exit3] = np.nan
-        vy[ind_exit3] = np.nan
-        print("Exit 3")             
-
+        ind_exit3 = ind_exit3[0][0]
+        if exit3_time == 0:
+            exit3_time = exit_cooldown
+            nx[ind_exit3] = np.nan
+            ny[ind_exit3] = np.nan
+            vx[ind_exit3] = np.nan
+            vy[ind_exit3] = np.nan
+            print("Exit 3")             
+        else:
+            exit3_time -=1
 
     for i in range(N2):
 
@@ -295,7 +322,7 @@ ax.plot(x3, y3, color='black', lw=3)
 ax.plot(x4, y4, color='black', lw=3)
 
 # Initialize particle markers
-particles, = ax.plot([], [], 'bo', markersize=9)  # 'bo' means blue circles
+particles, = ax.plot([], [], 'bo', markersize=8)  # 'bo' means blue circles
 
 # Initialization function
 def init():
@@ -311,7 +338,8 @@ def update(frame):
     particles.set_data(x[valid], y[valid])
     return particles,
 
+
 # Create the animation
-ani = FuncAnimation(fig, update, frames=range(0, t_tot, 10), init_func=init, blit=False, interval=50)
+ani = FuncAnimation(fig, update, frames=range(0, t, 10), init_func=init, blit=False, interval=50)
 # Show the animation
 plt.show()
