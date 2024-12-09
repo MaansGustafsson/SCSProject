@@ -20,7 +20,7 @@ doors = [door_1,door_2, door_3]
 dt = 0.01
 
 #Initialize random positions in 3 different areas of the arena
-def initialize_particles(N,N2):    
+def initialize_particles(N,N2,v0,v0_var):    
     x = np.zeros(N2)
     y = np.zeros(N2)
     x[:N] = np.random.randint(low = 31, high = 104, size=[N])
@@ -31,8 +31,8 @@ def initialize_particles(N,N2):
     y[2*N:] = np.random.randint(low = 10, high = 27, size=[N])
     #Randomizes angle of velocity
     phi = np.random.rand(N2)*2*np.pi
-    vx = v0*np.cos(phi)
-    vy = v0*np.sin(phi)
+    vx = (v0 - np.random.rand()*v0_var)*np.cos(phi)
+    vy = (v0 - np.random.rand()*v0_var)*np.sin(phi)
 
     return x, y, vx, vy
 
@@ -85,7 +85,7 @@ def calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2):
         nvx = np.cos(randangle) * vx - np.sin(randangle) * vy
         nvy = np.sin(randangle) * vx + np.cos(randangle) * vy
 
-    else: #Closest door + some 'intoxicated' agents.
+    elif sim == 2: #Closest door + some 'intoxicated' agents.
         drunk_range = rotation_range*9
         vx, vy = point_to_door(x, y, closest_door, doors)
         #Updates the velocities with increased random angle
@@ -95,6 +95,17 @@ def calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2):
         nvy = np.sin(randangle) * vx + np.cos(randangle) * vy
         nvx[int(N/2):int(3*N/2)] = np.cos(randangle_drunk) * vx[int(N/2):int(3*N/2)] - np.sin(randangle_drunk) * vy[int(N/2):int(3*N/2)]
         nvy[int(N/2):int(3*N/2)] = np.sin(randangle_drunk) * vx[int(N/2):int(3*N/2)] + np.cos(randangle_drunk) * vy[int(N/2):int(3*N/2)] 
+
+    elif sim == 3: #Assigned door + some 'intoxicated' agents.
+        drunk_range = rotation_range*9
+        vx, vy = point_to_door(x, y, rand_door, doors)
+        #Updates the velocities with increased random angle
+        randangle_drunk = (np.random.rand(N) - 0.5) * 2 * drunk_range
+        randangle = (np.random.rand(N2) - 0.5) * 2 * rotation_range
+        nvx = np.cos(randangle) * vx - np.sin(randangle) * vy
+        nvy = np.sin(randangle) * vx + np.cos(randangle) * vy
+        nvx[int(N/2):int(3*N/2)] = np.cos(randangle_drunk) * vx[int(N/2):int(3*N/2)] - np.sin(randangle_drunk) * vy[int(N/2):int(3*N/2)]
+        nvy[int(N/2):int(3*N/2)] = np.sin(randangle_drunk) * vx[int(N/2):int(3*N/2)] + np.cos(randangle_drunk) * vy[int(N/2):int(3*N/2)]        
     
     #Redirect around walls to not get stuck
     ind_wall1 = np.where((x<31) & (y>=28))
@@ -260,65 +271,72 @@ def wall_bounce(nx, ny, nvx, nvy, N2):
 
 #----------- CHOSE SIMULATION TYPE AND SETTINGS --------#
 v0 = 4 #Velocity
+v0_var = 2 #Varies velocity between 2-4
 rotation_range = np.pi / 15 #The maximum amount of random rotation
+
 exit_cooldown = int(0.5/dt) # Two exits every seconds
-pop_size_list = [30, 60, 90, 150, 240, 360, 450] #Different number of agents to simulate
-sim = 0 # sim = 0 is closest exit, sim = 1 is assigned exit, sim = 2 is with some 'drunk' particles
+
+pop_size_list = [90, 180, 360, 540, 720, 900] #Different number of agents to simulate
+max_sim = 3 # sim = 0 is closest exit, sim = 1 is assigned exit, sim = 2 is with some 'drunk' particles, sim=3 is assigned with some drunk agents.
 
 '''x_path = np.zeros([t_tot,N2])
 y_path = np.zeros([t_tot,N2])'''
 #Max run steps
 t_tot = 50000
-N_sim = 3 # Number of simulations to average over
+N_sim = 5 # Number of simulations to average over
 total_time = np.zeros([len(pop_size_list), N_sim]) #Tracks total time to take average from many simulations
+avg_time_sim = np.zeros([max_sim+1, len(pop_size_list)])
 
 #Simulation runs for max 50 000 steps and breaks when everyone is evacuated.
-for s in range(len(pop_size_list)):
+for sims in range(max_sim):
+    sim = sims
+    for s in range(len(pop_size_list)):
 
-    print(f"Simulation {s}")
-    N2 = pop_size_list[s]
-    N = int(N2/3)
+        print(f"Simulation {s}")
+        N2 = pop_size_list[s]
+        N = int(N2/3)
 
-    for k in range(N_sim):
+        for k in range(N_sim):
 
-        x,y,vx,vy = initialize_particles(N,N2)
-        exit1_time, exit2_time, exit3_time = 0,0,0
-        rand_door = np.random.randint(low=0,high=3,size=N2)
+            x,y,vx,vy = initialize_particles(N,N2,v0,v0_var)
+            exit1_time, exit2_time, exit3_time = 0,0,0
+            rand_door = np.random.randint(low=0,high=3,size=N2)
 
-        for t in range(t_tot):
+            for t in range(t_tot):
 
-            #Saves the path of the points
-            '''x_path[t,:] = x
-            y_path[t,:] = y'''
+                #Saves the path of the points
+                '''x_path[t,:] = x
+                y_path[t,:] = y'''
 
-            # Find the closest door for each particle
-            closest_door = find_closest_door(x, y, doors)
+                # Find the closest door for each particle
+                closest_door = find_closest_door(x, y, doors)
 
-            # Calculate velocity towards door, based of simulation type and also redirect around walls.
-            nvx, nvy = calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2)
+                # Calculate velocity towards door, based of simulation type and also redirect around walls.
+                nvx, nvy = calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2)
 
-            # ( Volume Exclusion might be added here. )
+                # ( Volume Exclusion might be added here. )
 
-            # Update positions
-            nx = x + nvx * dt
-            ny = y + nvy * dt
+                # Update positions
+                nx = x + nvx * dt
+                ny = y + nvy * dt
 
-            #Check if any particle has reached an exit and apply queue
-            nx, ny, vx, vy, exit1_time, exit2_time, exit3_time = check_exits(nx, ny, exit_cooldown, exit1_time, exit2_time, exit3_time)
+                #Check if any particle has reached an exit and apply queue
+                nx, ny, vx, vy, exit1_time, exit2_time, exit3_time = check_exits(nx, ny, exit_cooldown, exit1_time, exit2_time, exit3_time)
 
-            #Bounce particle of walls
-            x, y, vx, vy = wall_bounce(nx, ny, nvx, nvy, N2)
+                #Bounce particle of walls
+                x, y, vx, vy = wall_bounce(nx, ny, nvx, nvy, N2)
 
-            #Break when all particles have evacuated        
-            if np.all(np.isnan(x)):
-                total_time[s,k] = t
-                #print(f"The evacuation time was {t * dt:.2f} seconds")
-                break 
+                #Break when all particles have evacuated        
+                if np.all(np.isnan(x)):
+                    total_time[s,k] = t
+                    #print(f"The evacuation time was {t * dt:.2f} seconds")
+                    break 
+    avg_time = np.mean(total_time, axis=1)*dt
+    avg_time_sim[sim,:] = avg_time
 
 
-avg_time = np.mean(total_time, axis=1)*dt
-print(avg_time)
-print(total_time)
+print(avg_time_sim)
+
 
 '''
 # Points to visualize the boundaries
