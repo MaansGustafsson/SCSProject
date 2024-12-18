@@ -20,7 +20,7 @@ doors = [door_1,door_2, door_3]
 dt = 0.01
 
 #Initialize random positions in 3 different areas of the arena
-def initialize_particles(N,N2,v0,v0_var):    
+def initialize_particles(N,N2,v0_up,v0_low):    
     x = np.zeros(N2)
     y = np.zeros(N2)
     x[:N] = np.random.randint(low = 31, high = 104, size=[N])
@@ -31,10 +31,11 @@ def initialize_particles(N,N2,v0,v0_var):
     y[2*N:] = np.random.randint(low = 10, high = 27, size=[N])
     #Randomizes angle of velocity
     phi = np.random.rand(N2)*2*np.pi
-    vx = (v0 - np.random.rand()*v0_var)*np.cos(phi)
-    vy = (v0 - np.random.rand()*v0_var)*np.sin(phi)
+    v0 = v0_up - np.random.rand(N2)*v0_low
+    vx = v0*np.cos(phi)
+    vy = v0*np.sin(phi)
 
-    return x, y, vx, vy
+    return x, y, vx, vy, v0
 
 def find_closest_door(x, y, doors):
     doors_x = np.array([door[0] for door in doors])
@@ -49,7 +50,7 @@ def find_closest_door(x, y, doors):
         closest_door.append(closest)
     return(closest_door)            
 
-def point_to_door(x, y, chosen_door, doors):
+def point_to_door(x, y, chosen_door, doors,v0):
     doors_x = np.array([door[0] for door in doors])
     doors_y = np.array([door[1] for door in doors])
     vx = []
@@ -62,24 +63,24 @@ def point_to_door(x, y, chosen_door, doors):
         dist = np.sqrt(dx**2 + dy**2) + 1e-16  # Avoid division by zero
         
         # Normalize velocity and scale by v0
-        vx.append(v0 * (dx / dist))
-        vy.append(v0 * (dy / dist))
+        vx.append(v0[i] * (dx / dist))
+        vy.append(v0[i] * (dy / dist))
 
     return np.array(vx), np.array(vy)
 
-def calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2):
+def calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2, v0):
 
     #Different velocities depending on which simulation is ran
 
     if sim == 0: #Closest door
-        vx, vy = point_to_door(x, y, closest_door, doors)
+        vx, vy = point_to_door(x, y, closest_door, doors, v0)
         #Updates the velocities with random angle
         randangle = (np.random.rand(N2) - 0.5) * 2 * rotation_range
         nvx = np.cos(randangle) * vx - np.sin(randangle) * vy
         nvy = np.sin(randangle) * vx + np.cos(randangle) * vy
 
     elif sim == 1: #Assigned door
-        vx, vy = point_to_door(x, y, rand_door, doors)
+        vx, vy = point_to_door(x, y, rand_door, doors, v0)
         #Updates the velocities with random angle
         randangle = (np.random.rand(N2) - 0.5) * 2 * rotation_range
         nvx = np.cos(randangle) * vx - np.sin(randangle) * vy
@@ -87,7 +88,7 @@ def calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2):
 
     elif sim == 2: #Closest door + some 'intoxicated' agents.
         drunk_range = rotation_range*9
-        vx, vy = point_to_door(x, y, closest_door, doors)
+        vx, vy = point_to_door(x, y, closest_door, doors, v0)
         #Updates the velocities with increased random angle
         randangle_drunk = (np.random.rand(N) - 0.5) * 2 * drunk_range
         randangle = (np.random.rand(N2) - 0.5) * 2 * rotation_range
@@ -98,7 +99,7 @@ def calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2):
 
     elif sim == 3: #Assigned door + some 'intoxicated' agents.
         drunk_range = rotation_range*9
-        vx, vy = point_to_door(x, y, rand_door, doors)
+        vx, vy = point_to_door(x, y, rand_door, doors, v0)
         #Updates the velocities with increased random angle
         randangle_drunk = (np.random.rand(N) - 0.5) * 2 * drunk_range
         randangle = (np.random.rand(N2) - 0.5) * 2 * rotation_range
@@ -270,22 +271,20 @@ def wall_bounce(nx, ny, nvx, nvy, N2):
 
 
 #----------- CHOSE SIMULATION TYPE AND SETTINGS --------#
-v0 = 4 #Velocity
-v0_var = 2 #Varies velocity between 2-4
+v0_up = 4 #max Velocity
+v0_low = 2 #Varies velocity between 2-4
 rotation_range = np.pi / 15 #The maximum amount of random rotation
 
 exit_cooldown = int(0.5/dt) # Two exits every seconds
 
 pop_size_list = [90, 180, 360, 540, 720, 900] #Different number of agents to simulate
-max_sim = 3 # sim = 0 is closest exit, sim = 1 is assigned exit, sim = 2 is with some 'drunk' particles, sim=3 is assigned with some drunk agents.
+max_sim = 4 # sim = 0 is closest exit, sim = 1 is assigned exit, sim = 2 is closest with some dizzy particles, sim=3 is assigned with some dizzy agents.
 
-'''x_path = np.zeros([t_tot,N2])
-y_path = np.zeros([t_tot,N2])'''
 #Max run steps
 t_tot = 50000
-N_sim = 5 # Number of simulations to average over
+N_sim = 1 # Number of simulations to average over
 total_time = np.zeros([len(pop_size_list), N_sim]) #Tracks total time to take average from many simulations
-avg_time_sim = np.zeros([max_sim+1, len(pop_size_list)])
+avg_time_sim = np.zeros([max_sim, len(pop_size_list)])
 
 #Simulation runs for max 50 000 steps and breaks when everyone is evacuated.
 for sims in range(max_sim):
@@ -298,7 +297,7 @@ for sims in range(max_sim):
 
         for k in range(N_sim):
 
-            x,y,vx,vy = initialize_particles(N,N2,v0,v0_var)
+            x,y,vx,vy,v0 = initialize_particles(N,N2,v0_up,v0_low)
             exit1_time, exit2_time, exit3_time = 0,0,0
             rand_door = np.random.randint(low=0,high=3,size=N2)
 
@@ -312,7 +311,7 @@ for sims in range(max_sim):
                 closest_door = find_closest_door(x, y, doors)
 
                 # Calculate velocity towards door, based of simulation type and also redirect around walls.
-                nvx, nvy = calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2)
+                nvx, nvy = calculate_velocity(x, y, closest_door, doors, rotation_range, sim, N, N2, v0)
 
                 # ( Volume Exclusion might be added here. )
 
@@ -336,52 +335,3 @@ for sims in range(max_sim):
 
 
 print(avg_time_sim)
-
-
-'''
-# Points to visualize the boundaries
-x1 = [0,0,0,12]
-x2 = [17,30,30,30,30,104]
-x3 = [109,140,140,140]
-x4 = [140,140,140,104,104,104,104,67,67,67,67,58,58,58,58,44,44,44,44,0]
-y1 = [9,28,28,28]
-y2 = [28,28,28,40,40,40]
-y3 = [40,40,40,10]
-y4 = [5,0,0,0,0,30,30,30,30,6,6,6,6,20,20,20,20,9,9,9]
-
-# Animation of trajectories
-fig, ax = plt.subplots(figsize=(14, 10))
-ax.set_xlim(-1, Lx + 1)
-ax.set_ylim(-1, Ly + 1)
-ax.set_aspect('equal', adjustable='box')
-ax.set_xlabel('X-axis')
-ax.set_ylabel('Y-axis')
-
-# Plot boundaries in animation
-ax.plot(x1, y1, color='black', lw=3)
-ax.plot(x2, y2, color='black', lw=3)
-ax.plot(x3, y3, color='black', lw=3)
-ax.plot(x4, y4, color='black', lw=3)
-
-# Initialize particle markers
-particles, = ax.plot([], [], 'bo', markersize=8)  # 'bo' means blue circles
-
-# Initialization function
-def init():
-    particles.set_data([], [])
-    return particles,
-
-def update(frame):
-    x = x_path[frame, :]
-    y = y_path[frame, :]
-
-    # Exclude NaN values
-    valid = ~np.isnan(x) & ~np.isnan(y)
-    particles.set_data(x[valid], y[valid])
-    return particles,
-
-
-# Create the animation
-ani = FuncAnimation(fig, update, frames=range(0, t, 10), init_func=init, blit=False, interval=50)
-# Show the animation
-plt.show() '''
